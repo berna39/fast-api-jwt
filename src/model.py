@@ -1,8 +1,9 @@
 from pydantic import BaseModel, Field, EmailStr
+from typing import Union
 import uuid
 
 class PostSchema(BaseModel):
-    id: str = Field(default=uuid.uuid4())
+    id: str = Field(default_factory=uuid.uuid4, alias="_id")
     title: str = Field(...)
     content: str = Field(...)
 
@@ -15,7 +16,7 @@ class PostSchema(BaseModel):
         }
 
 class UserSchema(BaseModel):
-    id: str = Field(default=uuid.uuid4())
+    id: str = Field(default_factory=uuid.uuid4, alias="_id")
     fullname: str = Field(...)
     email: EmailStr = Field(...)
     password: str = Field(...)
@@ -40,3 +41,7 @@ class UserLoginSchema(BaseModel):
                 "password": "weakpassword"
             }
         }
+
+class UserPasswordSchema(BaseModel):
+    email: Union[EmailStr, None] = Field(default=None)
+    password: str = Field(...)

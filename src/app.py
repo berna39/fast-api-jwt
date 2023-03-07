@@ -1,12 +1,13 @@
-from fastapi import FastAPI, Body, Depends, Request, Response
-from model import PostSchema, UserSchema, UserLoginSchema
+from fastapi import FastAPI, Body, Depends, Request, Response, status
+from fastapi.responses import JSONResponse
+from model import PostSchema, UserSchema, UserLoginSchema, UserPasswordSchema
 from fastapi.encoders import jsonable_encoder
 from typing import List
 from pymongo import MongoClient
 from dotenv import dotenv_values
 import bcrypt
 
-from auth.auth_handler import signJWT, check_user
+from auth.auth_handler import signJWT, check_user, generate_password_link, verify_payload_link
 from auth.auth_bearer import JWTBearer
 
 app = FastAPI()
@@ -28,10 +29,10 @@ users = []
 async def root() -> dict:
     return {"message": "Hello from the app"}
 
-@app.get("/posts", dependencies=[Depends(JWTBearer())], tags=["posts"], response_model=List[PostSchema])
+@app.get("/posts", dependencies=[Depends(JWTBearer())], response_model=List[PostSchema], tags=["posts"])
 async def get_posts(request: Request):
     posts = list(request.app.database["posts"].find(limit=100))
-    return posts 
+    return posts
 
 
 @app.get("/posts/{id}", tags=["posts"])
@@ -62,11 +63,43 @@ async def create_user(request: Request, user: UserSchema = Body(...)):
     return signJWT(created_user.id)
 
 @app.post("/user/login", tags=["user"])
-async def user_login(request: Request, user: UserLoginSchema = Body(...)):
+async def user_login(request: Request, response: Response, user: UserLoginSchema = Body(...)):
     if check_user(request, user):
         user = request.app.database["users"].find_one({ "email": user.email })
         user = UserSchema.parse_obj(user)
         return signJWT(user.id)
+    response.status_code = status.HTTP_401_UNAUTHORIZED
+    
     return {
         "error": "Wrong login details!"
     }
+
+@app.get("/user/forgot-password/{user_id}")
+async def forgot_password(request: Request, user_id: str):
+    user = request.app.database["users"].find_one(
+        { "_id": user_id }
+    )
+    if user is None:
+        return {"message": "user not found"}
+    else:
+        user = UserSchema.parse_obj(user)
+        return generate_password_link(user.id, user.password)
+
+@app.post("/user/reset/{user_id}/{token}")
+async def new_password(request: Request, user_id: str, token: str, new_user: UserPasswordSchema = Body(...)):
+    user = request.app.database["users"].find_one(
+        { "_id": user_id }
+    )
+    if user is None:
+        return {"message": "Invalid link"}
+    else:
+        user = UserPasswordSchema.parse_obj(user)
+        if verify_payload_link(token, user.password):
+            user.password = bcrypt.hashpw(bytes(new_user.password, "utf-8"), bcrypt.gensalt())
+            request.app.database["users"].update_one(
+                {"_id": user_id}, { "$set": jsonable_encoder(user) }
+            )
+
+            return {"message": "Password reseted"}
+        
+    return {"message": "invalid token"}
