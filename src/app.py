@@ -69,7 +69,7 @@ async def user_login(request: Request, response: Response, user: UserLoginSchema
         user = UserSchema.parse_obj(user)
         return signJWT(user.id)
     response.status_code = status.HTTP_401_UNAUTHORIZED
-    
+
     return {
         "error": "Wrong login details!"
     }
