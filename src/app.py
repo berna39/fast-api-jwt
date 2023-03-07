@@ -22,9 +22,6 @@ def statup():
 def shutdown():
     app.mongo_client.close()
 
-users = []
-
-
 @app.get("/")
 async def root() -> dict:
     return {"message": "Hello from the app"}
